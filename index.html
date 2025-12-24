@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary Meta Tags -->
+  <title>Crytonix - Intelligent Academic Companion</title>
+  <meta name="title" content="Crytonix - Intelligent Academic Companion">
+  <meta name="description"
+    content="Your intelligent companion for solving complex questions, architecting code, and mastering academics with AI-powered synthesis and handwritten simulation.">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://crytonix.vercel.app/">
+  <meta property="og:title" content="Crytonix - Intelligent Academic Companion">
+  <meta property="og:description"
+    content="Your intelligent companion for solving complex questions, architecting code, and mastering academics with AI-powered synthesis.">
+  <meta property="og:image" content="https://crytonix.vercel.app/og-image.jpg">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://crytonix.vercel.app/">
+  <meta property="twitter:title" content="Crytonix - Intelligent Academic Companion">
+  <meta property="twitter:description"
+    content="Your intelligent companion for solving complex questions, architecting code, and mastering academics.">
+  <meta property="twitter:image" content="https://crytonix.vercel.app/og-image.jpg">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0f172a">
+  <!-- Tailwind CDN removed as per browser warning -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Handlee&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fira-code@5.1.1/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    @font-face {
+      font-family: 'Fira Math';
+      src: url('https://cdn.jsdelivr.net/npm/@phiresky/fira-math-font@1.0.1/fira-math.woff2') format('woff2');
+      font-display: swap;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    .handwriting {
+      font-family: 'Handlee', cursive;
+      line-height: 2.2rem;
+      letter-spacing: -0.01em;
+      word-break: break-word;
+    }
+
+    .math-text {
+      font-family: 'Fira Math', 'Fira Code', monospace;
+      font-weight: 500;
+      font-style: normal;
+      color: #1e3a8a;
+      font-size: 1.1em;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .katex {
+      font-size: 1.15em !important;
+      color: #1e3a8a;
+    }
+
+    :root {
+      --a3-width: 1050px;
+      --a3-min-height: 1485px;
+      --line-color: rgba(226, 114, 184, 0.12);
+      --margin-color: rgba(59, 130, 246, 0.25);
+    }
+
+    .a3-sheet-container {
+      width: var(--a3-width);
+      max-width: 100%;
+      margin: 0 auto;
+      position: relative;
+      background: white;
+    }
+
+    .lined-paper {
+      background-color: #ffffff;
+      background-image: linear-gradient(var(--line-color) 1px, transparent 1px);
+      background-size: 100% 2.2rem;
+      background-attachment: local;
+      position: relative;
+      min-height: var(--a3-min-height);
+      height: auto;
+      width: 100%;
+      box-sizing: border-box;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e2e8f0;
+      padding-bottom: 10rem;
+    }
+
+    .lined-paper::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 5rem;
+      bottom: 0;
+      width: 1px;
+      background-color: var(--margin-color);
+      z-index: 5;
+    }
+
+    .lined-paper::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 5.25rem;
+      bottom: 0;
+      width: 1px;
+      background-color: var(--margin-color);
+      z-index: 5;
+    }
+
+    @media (max-width: 1024px) {
+      :root {
+        --a3-width: 100%;
+        --a3-min-height: auto;
+      }
+
+      .lined-paper {
+        padding-bottom: 6rem;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .lined-paper::before {
+        left: 2.5rem;
+      }
+
+      .lined-paper::after {
+        left: 2.75rem;
+      }
+
+      .lined-paper {
+        padding-bottom: 5rem;
+        background-size: 100% 2rem;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .lined-paper {
+        min-height: auto;
+        box-shadow: none;
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .no-break-inside {
+      break-inside: avoid-page;
+    }
+
+    .immersive-scroller::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .immersive-scroller::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .immersive-scroller::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+    }
+
+    @media print {
+      @page {
+        size: A3;
+        margin: 0;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      body {
+        background: white !important;
+      }
+
+      .a3-sheet-container {
+        max-width: none !important;
+        width: 297mm !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+      }
+
+      .lined-paper {
+        margin: 0 !important;
+        padding: 20mm 20mm 20mm 35mm !important;
+        box-shadow: none !important;
+        border: none !important;
+        width: 297mm !important;
+        height: auto !important;
+        min-height: 420mm !important;
+        background-color: white !important;
+        page-break-after: always;
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+</body>
+
+</html>

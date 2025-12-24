@@ -1,0 +1,7 @@
+{
+  "name": "Answer Sheet Pro",
+  "description": "Generate photorealistic, handwritten exam solutions from uploaded question papers using Gemini's advanced multimodal analysis and image generation.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
