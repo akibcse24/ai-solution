@@ -134,12 +134,122 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
   throw lastError;
 }
 
-export const analyzeExamPaper = async (files: { data: string, mimeType: string }[], _modelName: string): Promise<ExamAnalysis> => {
+
+
+const getGroqApiKey = () => {
+  if (typeof window !== 'undefined') {
+    const key = localStorage.getItem('groq_api_key_local_v3') || undefined;
+    if (key) return key;
+  }
+  return import.meta.env.VITE_GROQ_API_KEY;
+};
+
+const analyzeWithGroq = async (files: { data: string, mimeType: string }[], promptText: string): Promise<ExamAnalysis> => {
+  const apiKey = getGroqApiKey();
+  if (!apiKey) throw new Error("No Groq API key available");
+
+  // Helper to call Groq
+  const callGroq = async (model: string) => {
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: promptText },
+          ...files.map(f => {
+            // Ensure data is just the base64 part and sanitized
+            const cleanData = (f.data || "").replace(/\s/g, '');
+            return {
+              type: "image_url",
+              image_url: { url: `data:${f.mimeType};base64,${cleanData}` }
+            };
+          })
+        ]
+      }
+    ];
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 4096
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Groq Error (${model}): ${err}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content || "{}";
+    return JSON.parse(content) as ExamAnalysis;
+  };
+
+  try {
+    // Try precise user model first
+    return await callGroq("meta-llama/llama-4-maverick-17b-128e-instruct");
+  } catch (e: any) {
+    console.warn("Groq Llama 4 failed, falling back to Llama 3.2 Vision...", e);
+    // Fallback to known working vision model
+    return await callGroq("llama-3.2-90b-vision-preview");
+  }
+};
+
+const analyzeWithOpenRouter = async (files: { data: string, mimeType: string }[], promptText: string): Promise<ExamAnalysis> => {
+  return await withProviderRetry('openrouter', async (apiKey) => {
+    const messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: promptText },
+          ...files.map(f => ({
+            type: "image_url",
+            image_url: { url: `data:${f.mimeType};base64,${f.data}` }
+          }))
+        ]
+      }
+    ];
+
+    // Use a vision-capable cheap model on OpenRouter as fallback
+    const model = 'google/gemini-flash-1.5';
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "http://localhost",
+        "X-Title": "Academic Architect Vision"
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`OpenRouter Vision failed: ${err}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content || "{}";
+    return JSON.parse(content) as ExamAnalysis;
+  });
+};
+
+export const analyzeExamPaper = async (files: { data: string, mimeType: string }[], modelName: string = 'gemini-3-flash-preview'): Promise<ExamAnalysis> => {
   const fileParts = files.map(file => ({
     inlineData: { mimeType: file.mimeType, data: file.data.split(',')[1] }
   }));
-
-  const fastModelGemini = 'gemini-3-flash-preview';
 
   const prompt = `
     Analyze these exam papers. Extract questions/marks structure.
@@ -157,18 +267,67 @@ export const analyzeExamPaper = async (files: { data: string, mimeType: string }
     }
   `;
 
-  // SCANNING: Strictly Gemini only as requested
-  return await withProviderRetry('gemini', async (apiKey) => {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: fastModelGemini,
-      contents: { parts: [...fileParts, { text: prompt }] },
-      config: {
-        responseMimeType: "application/json"
-      }
+  // LAYER 1: Try Gemini Primary (Gemini 3 + Thinking/Tools)
+  try {
+    return await withProviderRetry('gemini', async (apiKey) => {
+      const ai = new GoogleGenAI({ apiKey });
+
+      const generate = async (model: string) => {
+        const isGemini3 = model.includes('gemini-3-flash-preview');
+        const config: any = { responseMimeType: "application/json" };
+
+        if (isGemini3) {
+          config.thinkingConfig = { thinkingLevel: 'HIGH' };
+          config.tools = [{ googleSearch: {} }];
+        }
+
+        const response = await ai.models.generateContent({
+          model: model,
+          contents: { parts: [...fileParts, { text: prompt }] },
+          config: config
+        });
+        return JSON.parse(response.text || "{}") as ExamAnalysis;
+      };
+
+      console.log(`Attempting scan with primary model: ${modelName}`);
+      return await generate(modelName);
     });
-    return JSON.parse(response.text || "{}") as ExamAnalysis;
-  });
+  } catch (e: any) {
+    console.warn(`Layer 1 (Gemini 3) failed: ${e.message}. Trying Layer 2...`);
+  }
+
+  // LAYER 2: Try Gemini Fallback (Gemini 2.0 Flash Exp)
+  try {
+    return await withProviderRetry('gemini', async (apiKey) => {
+      const ai = new GoogleGenAI({ apiKey });
+      console.log("Attempting scan with Layer 2: gemini-2.0-flash-exp");
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp', // Explicit stable experimental
+        contents: { parts: [...fileParts, { text: prompt }] },
+        config: { responseMimeType: "application/json" }
+      });
+      return JSON.parse(response.text || "{}") as ExamAnalysis;
+    });
+  } catch (e: any) {
+    console.warn(`Layer 2 (Gemini 2.0) failed: ${e.message}. Trying Layer 3 (Groq)...`);
+  }
+
+  // LAYER 3: Groq Vision Fallback
+  try {
+    console.log("Attempting scan with Layer 3: Groq Vision");
+    return await analyzeWithGroq(files.map(f => ({ ...f, data: f.data.split(',')[1] })), prompt);
+  } catch (e: any) {
+    console.warn(`Layer 3 (Groq) failed: ${e.message}. Trying Layer 4 (OpenRouter)...`);
+  }
+
+  // LAYER 4: OpenRouter Fallback
+  try {
+    console.log("Attempting scan with Layer 4: OpenRouter");
+    return await analyzeWithOpenRouter(files.map(f => ({ ...f, data: f.data.split(',')[1] })), prompt);
+  } catch (e: any) {
+    console.error("All layers failed.", e);
+    throw new Error(`Scan failed after 4 types of fallback. Last error: ${e.message}`);
+  }
 };
 
 export const refineAcademicAnswer = async (question: ExamQuestion, modelName: string, provider: ModelProvider): Promise<string> => {
@@ -259,4 +418,30 @@ export const generateTechnicalDiagram = async (description: string): Promise<str
     }
     throw new Error("Diagram generation failed.");
   }, 3, 2000);
+};
+
+export const generateChatTitle = async (messages: { role: string, content: string }[], provider: ModelProvider = 'gemini'): Promise<string> => {
+  if (messages.length === 0) return "New Chat";
+
+  const firstMsg = messages.find(m => m.role === 'user')?.content.substring(0, 100) || "Chat";
+  const prompt = `
+    Generate a short, concise title (max 4-6 words) for this chat conversation.
+    First user message: "${firstMsg}"
+    
+    OUTPUT: Title text only. NO quotes.
+  `;
+
+  try {
+    return await withProviderRetry(provider, async (apiKey) => {
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp', // Fast model
+        contents: { parts: [{ text: prompt }] }
+      });
+      return response.text?.trim() || "New Chat";
+    });
+  } catch (e) {
+    console.warn("Title generation failed, using default", e);
+    return "New Chat";
+  }
 };

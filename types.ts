@@ -40,9 +40,14 @@ export interface ExamAnalysis {
 export interface HistoryItem {
   id: string;
   timestamp: number;
-  data: ExamAnalysis;
+  data: ExamAnalysis; // data can be analysis Result
+  // We keep RefinedQuestion[] separate
   refinedQuestions?: RefinedQuestion[];
   tags?: string[];
+
+  // Legacy or Chat specific fields
+  messages?: any[];
+  title?: string;
 }
 
 export enum AppState {
@@ -53,3 +58,5 @@ export enum AppState {
   COMPLETED = 'COMPLETED',
   ANALYZING_GENERAL = 'ANALYZING_GENERAL'
 }
+
+

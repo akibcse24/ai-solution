@@ -138,4 +138,47 @@ export class ChatService {
             throw error;
         }
     }
+    async generateTitle(messages: ChatMessage[]): Promise<string> {
+        if (messages.length === 0) return "New Chat";
+        const firstMsg = messages.find(m => m.role === 'user')?.content.substring(0, 100) || "Chat";
+        const prompt = [
+            { role: 'system', content: 'Generate a short, concise title (max 4-6 words) for this chat. OUTPUT: Title text only. NO quotes.' },
+            { role: 'user', content: `First user message: "${firstMsg}"` }
+        ] as ChatMessage[];
+
+        // Try Groq first for speed
+        if (this.groqClient) {
+            try {
+                const completion = await this.groqClient.chat.completions.create({
+                    model: 'llama-3.1-8b-instant', // Fast model (llama3-8b-8192 is decommissioned)
+                    messages: prompt,
+                    temperature: 0.5,
+                    max_tokens: 20
+                });
+                return completion.choices[0]?.message?.content?.trim() || "New Chat";
+            } catch (e) {
+                console.warn("Groq title generation failed, trying OpenRouter", e);
+            }
+        }
+
+        // Fallback to OpenRouter
+        if (this.openRouterKeys.length > 0) {
+            const client = this.getOpenRouterClient();
+            if (client) {
+                try {
+                    const completion = await client.chat.completions.create({
+                        model: 'meta-llama/llama-3.1-8b-instruct',
+                        messages: prompt,
+                        temperature: 0.5,
+                        max_tokens: 20
+                    });
+                    return completion.choices[0]?.message?.content?.trim() || "New Chat";
+                } catch (e) {
+                    console.warn("OpenRouter title generation failed", e);
+                }
+            }
+        }
+
+        return "New Chat";
+    }
 }
